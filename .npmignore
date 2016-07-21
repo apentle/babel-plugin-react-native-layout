@@ -1,0 +1,12 @@
+# testing coverage
+coverage
+
+# Example
+Example
+
+# DEV Enviroment
+tests
+.travis.yml
+
+# Source Code
+src
