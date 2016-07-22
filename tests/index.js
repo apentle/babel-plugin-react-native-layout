@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const babel = require('babel-core');
 
-const pluginPath = require.resolve('../lib');
+const pluginPath = require.resolve('./node_modules/babel-plugin-react-native-layout/lib');
 
 // Run each test case
 var error = 0;
@@ -53,12 +53,23 @@ function runTest(dir) {
   process.stdout.write('\n');
 }
 
+function recursiveTest(dir) {
+  fs.readdirSync(dir).map(item => {
+    if (item === 'actual.js') {
+      runTest({
+        path: dir,
+        name: dir.substr(dir.lastIndexOf('tests') + 6)
+      });
+    } else {
+      var dirPath = path.join(dir, item);
+      if (fs.statSync(dirPath).isDirectory()) {
+        recursiveTest(dirPath);
+      }
+    }
+  });
+}
+
 // Start to test
-fs.readdirSync(__dirname + '/fixtures/').map(item => {
-  return {
-    path: path.join(__dirname, 'fixtures', item),
-    name: item,
-  };
-}).filter(item => fs.statSync(item.path).isDirectory()).forEach(runTest);
+recursiveTest(__dirname);
 
 process.exit(error);

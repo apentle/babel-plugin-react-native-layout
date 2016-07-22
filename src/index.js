@@ -1,95 +1,89 @@
 'use strict';
 
-const libName = '_apTheme';
+const _apLayoutKey = '_apLayoutKey';
 
 module.exports = function ({types: t}) {
-  var progPath, mod, pragma, expression;
-  var style, css;
+  var component;
 
   return {
+    inherits: require('babel-plugin-transform-react-jsx'),
     visitor: {
-      JSXOpeningElement: {
-        exit(path, state) {
-          if (css != null) {
-            // Add header if needed
-            if (progPath != null) {
-              progPath.unshiftContainer('body', t.variableDeclaration(
-                'var',
-                [t.variableDeclarator(
-                  t.identifier(libName),
-                  t.callExpression(t.identifier('require'), [t.stringLiteral(mod)])
-                )]
-              ));
-              progPath = null;
+      JSXElement: function JSXElement(path, state) {
+        if (component === false) {
+          return;
+        }
+        if (component === undefined) {
+          // Init transform
+          if (path.parentPath.parent.type === 'Program') {
+            component = false;
+            // @TODO Transform to layout function
+            // @TODO Check layout key element
+
+            return;
+          } else {
+            // Transform component
+            var rootDir = __dirname.substr(0,
+              __dirname.indexOf('node_modules/babel-plugin-react-native-layout/lib')
+            );
+            var filename = state.file.opts.filename;
+            /* istanbul ignore else  */
+            if (filename.indexOf(rootDir) === 0) {
+              filename = filename.substr(rootDir.length);
             }
-            // Process classes
-            var classes = [];
-            if (t.isLiteral(css.node.value)) {
-              // string classes
-              classes = css.node.value.value.split(" ").filter(function(name){
-                return name.length !== 0;
-              }).map(function(name){
-                return t.memberExpression(pragma, t.identifier(name));
-              });
-            } else if (t.isJSXExpressionContainer(css.node.value)) {
-              // expression classes
-              if (expression != null) {
-                classes.push(t.callExpression(expression, [css.node.value.expression]));
-              } else if (t.isArrayExpression(css.node.value.expression)) {
-                classes = classes.concat(css.node.value.expression.elements);
+
+            // Transform file from node_modules folder
+            if (filename.indexOf('node_modules') !== -1) {
+              if (filename.indexOf('node_modules/apentle-plugin-') !== -1) {
+                // Process plugin key
+                filename = filename.substr(
+                  filename.indexOf('node_modules/apentle-plugin-') + 21
+                );
+              } else if (filename.indexOf('node_modules/apentle-theme-') !== -1) {
+                // Process theme key
+                filename = filename.substr(
+                  filename.indexOf('/',
+                    filename.indexOf('node_modules/apentle-theme-') + 21
+                  ) + 1
+                );
               } else {
-                classes.push(css.node.value.expression);
+                // DO NOT transform any file out of apentle system
+                component = false;
+                return;
               }
             }
-            if (style == null) {
-              style = css;
-              style.node.name.name = 'style';
-            } else {
-              if (t.isArrayExpression(style.node.value.expression)) {
-                classes = classes.concat(style.node.value.expression.elements);
-              } else {
-                classes.push(style.node.value.expression);
-              }
-              css.remove();
-            }
-            if (classes.length === 0) {
-              style.remove();
-            } else if (classes.length === 1) {
-              style.node.value = t.JSXExpressionContainer(classes[0]);
-            } else {
-              style.node.value = t.JSXExpressionContainer(t.ArrayExpression(classes));
-            }
-            // Reset temp variants
-            css = null;
+
+            filename = filename.substr(0, filename.lastIndexOf('.')); // remove .js
+            filename = filename.replace(/[^a-zA-Z0-9]/g, '_'); // special char to _
+
+            component = true;
+
+            // Insert layoutKey declaration
+            state.file.path.unshiftContainer('body', t.variableDeclaration(
+              'var',
+              [t.variableDeclarator(
+                t.identifier(_apLayoutKey),
+                t.stringLiteral(filename)
+              )]
+            ));
+
+            // Overwrite React.createElement
+            state.set('jsxIdentifier', function() {
+              return t.identifier('_createRNElement');
+            });
           }
-          style = null;
         }
-      },
-      JSXAttribute: function JSXAttribute(path, state) {
-        if (path.node.name.name === 'class') {
-          css = path;
-        } else if (path.node.name.name === 'style') {
-          style = path;
-        }
+        // Transform component
+        var attributes = path.node.openingElement.attributes;
+        attributes.push(t.JSXAttribute(
+          t.JSXIdentifier('layoutKey'), t.JSXExpressionContainer(t.JSXIdentifier(_apLayoutKey))
+        ));
+        attributes.push(t.JSXAttribute(
+          t.JSXIdentifier('layoutContext'), t.JSXExpressionContainer(t.thisExpression())
+        ));
       },
       Program: function Program(path, state) {
-        // Init rule for update layout
-        mod = state.opts.module;
-        pragma = state.opts.pragma;
-        if (mod != null) {
-          pragma = t.memberExpression(t.identifier(libName), t.identifier('styles'));
-          expression = t.memberExpression(t.identifier(libName), t.identifier('css'));
-          progPath = path;
-        } else if (pragma != null) {
-          pragma = pragma.split(".").map(function (name) {
-            return t.identifier(name);
-          }).reduce(function (object, property) {
-            return t.memberExpression(object, property);
-          });
-        } else {
-          pragma = t.identifier('styles');
-        }
-      }
+        component = undefined;
+      },
     }
   };
 }

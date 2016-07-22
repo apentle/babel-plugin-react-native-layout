@@ -5,10 +5,11 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "babel --presets es2015 --plugins transform-runtime src --out-dir lib",
-    "test": "npm run build && istanbul cover tests",
+    "test": "npm run build && mkdir -p tests/node_modules/babel-plugin-react-native-layout/ && cp -Rf lib tests/node_modules/babel-plugin-react-native-layout/ && istanbul cover tests --root tests/node_modules/babel-plugin-react-native-layout/lib/",
     "prepublish": "npm run build"
   },
   "dependencies": {
+    "babel-plugin-transform-react-jsx": "^6.8.0",
     "babel-runtime": "^6.3.19"
   },
   "devDependencies": {
