@@ -157,15 +157,15 @@ module.exports = function ({types: t}) {
         if (component === undefined) {
           // Init transform component
           var rootDir = __dirname.substr(0,
-            __dirname.indexOf('node_modules/babel-plugin-react-native-layout/lib')
+            __dirname.indexOf('node_modules/babel-p')
           );
           var filename = state.file.opts.filename;
           /* istanbul ignore else  */
           if (filename.indexOf(rootDir) === 0) {
             filename = filename.substr(rootDir.length);
-            if (filename.indexOf('app/') === 0) {
-              filename = filename.substr(4);
-            }
+          }
+          if (filename.indexOf('app/') === 0) {
+            filename = filename.substr(4);
           }
 
           // Transform file from node_modules folder
@@ -191,6 +191,7 @@ module.exports = function ({types: t}) {
 
           filename = filename.substr(0, filename.lastIndexOf('.')); // remove .js
           filename = filename.replace(/[^a-zA-Z0-9]/g, '_'); // special char to _
+          filename = filename.toLowerCase();
 
           component = true;
 

@@ -1,6 +1,6 @@
 {
   "name": "babel-plugin-react-native-layout",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Dynamic layout for react native components",
   "main": "lib/index.js",
   "scripts": {
