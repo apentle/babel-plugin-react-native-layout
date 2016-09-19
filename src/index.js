@@ -226,6 +226,14 @@ module.exports = function ({types: t}) {
           var statement = body[i];
           if (statement.type === 'ExpressionStatement' && statement.expression.type === 'JSXElement') {
             component = false;
+            // Fix for apentle layouts with css-class
+            // istanbul ignore next
+            if (path.opts.JSXOpeningElement !== undefined && path.opts.JSXAttribute !== undefined) {
+              path.traverse({
+                JSXOpeningElement: path.opts.JSXOpeningElement,
+                JSXAttribute: path.opts.JSXAttribute,
+              });
+            }
             transformLayout(statement);
             return;
           }
