@@ -21,14 +21,19 @@ module.exports = function (o) {
   o.element = viewMore();
   o.stopRender = true;
 
-  if (o.type === Text) {
+  if (o.type === Text && o.config && o.config['primary'] === true) {
     o.children.push(' New Text ');
+  }
+
+  if (o.type === Text) {
+    o.children.unshift(' Top Text ');
   }
 
   if (o.type === View && o.config && o.config['ref'] === 'content' && o.config['name'] === 'container') {
     o.config = o.config || {};
     o.config['style'] = styles.container;
     o.config['name'] = 'new';
+    o.config['default'] = true;
     o.children.push(moreView());
     o.children.push(this.props.results.map(function (result) {
       return React.createElement(ListItem, { data: result });

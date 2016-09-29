@@ -29,10 +29,11 @@ function moreView() {
     {viewMore()}
   </replace>
   <remove />
-  <addChildren type={Text}> New Text </addChildren>
+  <addChildren type={Text} primary> New Text </addChildren>
+  <addChildren type={Text} _top> Top Text </addChildren>
   <addChildren type='Text'> New Text </addChildren>
   <addChildren type={View} ref="content" name="container">
-    <props style={styles.container} name="new" />
+    <props style={styles.container} name="new" default />
     {moreView()}
     {
       this.props.results.map(function(result) {

@@ -16,18 +16,61 @@ module.exports = function ({types: t}) {
     var o = t.identifier('o');
     var type = t.memberExpression(o, t.identifier('type'));
     var config = t.memberExpression(o, t.identifier('config'));
-    var children = t.memberExpression(
+    var childrenPush = t.memberExpression(
       t.memberExpression(o, t.identifier('children')),
       t.identifier('push')
+    );
+    var childrenUnshift = t.memberExpression(
+      t.memberExpression(o, t.identifier('children')),
+      t.identifier('unshift')
     );
     var element = t.memberExpression(o, t.identifier('element'));
     var stopRender = t.memberExpression(o, t.identifier('stopRender'));
 
     for (var ii = 0, actionsLength = actions.length; ii < actionsLength; ii++) {
       var action = actions[ii];
-      if (action.type !== 'JSXElement') {
+      if (!t.isJSXElement(action)) {
         continue;
       }
+
+      // Check if conditions
+      var tests = [], configCondition = true, falseCondition = false;
+      var conditions = action.openingElement.attributes;
+      var children = childrenPush;
+      for (var j = 0, conditionsLength = conditions.length; j < conditionsLength; j++) {
+        var condition = conditions[j];
+        if (condition.name.name === 'type') {
+          // Type condition
+          if (t.isJSXExpressionContainer(condition.value)) {
+            tests.push(t.binaryExpression(
+              '===',
+              type,
+              condition.value.expression
+            ));
+          } else {
+            falseCondition = true;
+            break;
+          }
+        } else if (condition.name.name === '_top') {
+          children = childrenUnshift;
+        } else {
+          if (configCondition) {
+            tests.push(config);
+            configCondition = false;
+          }
+          tests.push(t.binaryExpression(
+            '===',
+            t.memberExpression(config, t.stringLiteral(condition.name.name), true),
+            t.isJSXExpressionContainer(condition.value) ?
+              condition.value.expression :
+              (condition.value === null ? t.booleanLiteral(true) : condition.value)
+          ));
+        }
+      }
+      if (falseCondition) {
+        continue;
+      }
+
       var statements = [];
       // Transform each action to block
       switch (action.openingElement.name.name) {
@@ -37,7 +80,7 @@ module.exports = function ({types: t}) {
           for (var j = 0, childrenLen = action.children.length; j < childrenLen; j++) {
             var child = action.children[j];
             var param = undefined;
-            if (child.type === 'JSXElement') {
+            if (t.isJSXElement(child)) {
               // @TODO process 'before' and 'after' element
               if (child.openingElement.name.name === 'props') {
                 // Update props
@@ -51,8 +94,10 @@ module.exports = function ({types: t}) {
                   var att = attributes[jj];
                   var left = t.memberExpression(config, t.stringLiteral(att.name.name), true);
                   var right;
-                  if (att.value.type === 'JSXExpressionContainer') {
+                  if (t.isJSXExpressionContainer(att.value)) {
                     right = att.value.expression;
+                  } else if (att.value === null) {
+                    right = t.booleanLiteral(true);
                   } else {
                     right = att.value;
                   }
@@ -62,7 +107,7 @@ module.exports = function ({types: t}) {
                 // JSX element
                 param = child;
               }
-            } else if (child.type === 'JSXExpressionContainer') {
+            } else if (t.isJSXExpressionContainer(child)) {
               // JS expression
               param = child.expression;
             } else if (child.value.trim().length > 0) {
@@ -77,10 +122,10 @@ module.exports = function ({types: t}) {
         case 'replace':
           for (var j = 0, childrenLen = action.children.length; j < childrenLen; j++) {
             var child = action.children[j];
-            if (child.type === 'JSXExpressionContainer') {
+            if (t.isJSXExpressionContainer(child)) {
               statements.push(t.assignmentExpression('=', element, child.expression));
               break;
-            } else if (child.type === 'JSXElement') {
+            } else if (t.isJSXElement(child)) {
               statements.push(t.assignmentExpression('=', element, child));
               break;
             }
@@ -98,34 +143,6 @@ module.exports = function ({types: t}) {
       statements = statements.map(function(exp) {
         return t.expressionStatement(exp);
       });
-      // Check if conditions
-      var tests = [], configCondition = true;
-      var conditions = action.openingElement.attributes;
-      for (var j = 0, conditionsLength = conditions.length; j < conditionsLength; j++) {
-        var condition = conditions[j];
-        if (condition.name.name === 'type') {
-          // Type condition
-          if (condition.value.type === 'JSXExpressionContainer') {
-            tests.push(t.binaryExpression(
-              '===',
-              type,
-              condition.value.expression
-            ));
-          } else {
-            statements = [];
-          }
-        } else {
-          if (configCondition) {
-            tests.push(config);
-            configCondition = false;
-          }
-          tests.push(t.binaryExpression(
-            '===',
-            t.memberExpression(config, t.stringLiteral(condition.name.name), true),
-            condition.value.type === 'JSXExpressionContainer' ? condition.value.expression : condition.value
-          ));
-        }
-      }
 
       // Append to blocks
       if (tests.length === 0) {
@@ -224,7 +241,7 @@ module.exports = function ({types: t}) {
         var body = path.node.body;
         for (var i = body.length; i--; ) {
           var statement = body[i];
-          if (statement.type === 'ExpressionStatement' && statement.expression.type === 'JSXElement') {
+          if (t.isExpressionStatement(statement) && t.isJSXElement(statement.expression)) {
             component = false;
             // Fix for apentle layouts with css-class
             // istanbul ignore next
