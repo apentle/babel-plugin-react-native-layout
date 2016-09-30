@@ -1,7 +1,12 @@
 'use strict';
 
-var _apLayoutKey = 'container_component_actual';
+var _apConnect = function (mapStateToProps) {
+  return function (store, ownProps) {
+    var state = typeof mapStateToProps === 'function' ? mapStateToProps(store, ownProps) : {};events.emit(_apLayoutKey, state, store, ownProps);return state;
+  };
+};var _apLayoutKey = 'container_component_actual';
 import React, { Component, StyleSheet, Text, View } from 'react-native';
+const { connect } = require('react-redux');
 
 class Inline extends Component {
   render() {
@@ -46,4 +51,10 @@ const styles = StyleSheet.create({
   more: {}
 });
 
-module.exports = Inline;
+function select(store) {
+  return {
+    random: store.random
+  };
+}
+
+module.exports = connect(_apConnect(select), {})(Inline);

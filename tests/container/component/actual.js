@@ -1,6 +1,7 @@
 'use strict';
 
 import React, { Component, StyleSheet, Text, View } from 'react-native';
+const {connect} = require('react-redux');
 
 class Inline extends Component {
   render() {
@@ -31,4 +32,10 @@ const styles = StyleSheet.create({
   more: {}
 });
 
-module.exports = Inline;
+function select(store) {
+  return {
+    random: store.random,
+  };
+}
+
+module.exports = connect(select, {})(Inline);
