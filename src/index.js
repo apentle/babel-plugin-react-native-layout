@@ -1,6 +1,6 @@
 'use strict';
 
-import * as babylon from "babylon";
+const babylon = require('babylon');
 
 const _apLayoutKey = '_apLayoutKey';
 const _apConnect = '_apConnect';
@@ -215,6 +215,60 @@ module.exports = function ({types: t}) {
 
           component = true;
 
+          // react-redux transform connect
+          var connecting = true, needDefineConnect = true;
+          state.file.path.traverse({
+            Identifier: function Identifier(path) {
+              if (path.node.name !== 'connect') {
+                return;
+              }
+              // Process react-redux connect
+              var parentPath = path.parentPath;
+              if (connecting) {
+                if (t.isObjectProperty(parentPath)) {
+                  parentPath = parentPath.parentPath;
+                  if (t.isObjectPattern(parentPath)) {
+                    parentPath = parentPath.parentPath;
+                    if (t.isVariableDeclarator(parentPath)
+                      && t.isCallExpression(parentPath.node.init)
+                      && parentPath.node.init.arguments.length > 0
+                      && t.isLiteral(parentPath.node.init.arguments[0])
+                      && parentPath.node.init.arguments[0].value === 'react-redux'
+                    ) {
+                      connecting = false;
+                    }
+                  }
+                } else if (t.isImportSpecifier(parentPath)) {
+                  parentPath = parentPath.parentPath;
+                  if (t.isImportDeclaration(parentPath)
+                    && t.isLiteral(parentPath.node.source)
+                    && parentPath.node.source.value === 'react-redux'
+                  ) {
+                    connecting = false;
+                  }
+                }
+              } else if (t.isCallExpression(parentPath) && parentPath.node.arguments.length > 0) {
+                var args = parentPath.node.arguments;
+                args[0] = t.callExpression(
+                  t.identifier(_apConnect),
+                  [args[0]]
+                );
+                // Add _apConnect function
+                if (needDefineConnect) {
+                  state.file.path.unshiftContainer('body', babylon.parse(`
+                    var ${_apConnect} = function(mapStateToProps) {
+                        return function(store, ownProps) {
+                          var state = typeof mapStateToProps === 'function' ? mapStateToProps(store, ownProps) : {};
+                          events.emit(${_apLayoutKey}, state, store, ownProps);
+                          return state;
+                        }
+                    };`));
+                  needDefineConnect = false;
+                }
+              }
+            }
+          });
+
           // Insert layoutKey declaration
           state.file.path.unshiftContainer('body', t.variableDeclaration(
             'var',
@@ -237,31 +291,6 @@ module.exports = function ({types: t}) {
         attributes.push(t.JSXAttribute(
           t.JSXIdentifier('layoutContext'), t.JSXExpressionContainer(t.thisExpression())
         ));
-      },
-      Identifier: function Identifier(path, state) {
-        if (path.node.name === 'connect') {
-          // Process react-redux connect
-          var parentPath = path.parentPath;
-          while (t.isMemberExpression(parentPath)) {
-            parentPath = parentPath.parentPath;
-          }
-          if (t.isCallExpression(parentPath) && parentPath.node.arguments.length > 0) {
-            var args = parentPath.node.arguments;
-            args[0] = t.callExpression(
-              t.identifier(_apConnect),
-              [args[0]]
-            );
-            // Add _apConnect function
-            state.file.path.unshiftContainer('body', babylon.parse(`
-              var ${_apConnect} = function(mapStateToProps) {
-                  return function(store, ownProps) {
-                    var state = typeof mapStateToProps === 'function' ? mapStateToProps(store, ownProps) : {};
-                    events.emit(${_apLayoutKey}, state, store, ownProps);
-                    return state;
-                  }
-              };`));
-          }
-        }
       },
       Program: function Program(path, state) {
         component = undefined;
