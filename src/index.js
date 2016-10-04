@@ -6,7 +6,7 @@ const _apLayoutKey = '_apLayoutKey';
 const _apConnect = '_apConnect';
 
 module.exports = function ({types: t}) {
-  var component;
+  var component, connecting, connect;
 
   /**
    * transform JSX style layout to a Modifier function
@@ -216,44 +216,15 @@ module.exports = function ({types: t}) {
           component = true;
 
           // react-redux transform connect
-          var connecting = true, needDefineConnect = true;
+          var needDefineConnect = true;
           state.file.path.traverse({
-            Identifier: function Identifier(path) {
-              if (path.node.name !== 'connect') {
-                return;
-              }
-              // Process react-redux connect
-              var parentPath = path.parentPath;
-              if (connecting) {
-                if (t.isObjectProperty(parentPath)) {
-                  parentPath = parentPath.parentPath;
-                  if (t.isObjectPattern(parentPath)) {
-                    parentPath = parentPath.parentPath;
-                    if (t.isVariableDeclarator(parentPath)
-                      && t.isCallExpression(parentPath.node.init)
-                      && parentPath.node.init.arguments.length > 0
-                      && t.isLiteral(parentPath.node.init.arguments[0])
-                      && parentPath.node.init.arguments[0].value === 'react-redux'
-                    ) {
-                      connecting = false;
-                    }
-                  }
-                } else if (t.isImportSpecifier(parentPath)) {
-                  parentPath = parentPath.parentPath;
-                  if (t.isImportDeclaration(parentPath)
-                    && t.isLiteral(parentPath.node.source)
-                    && parentPath.node.source.value === 'react-redux'
-                  ) {
-                    connecting = false;
-                  }
-                }
-              } else if (t.isCallExpression(parentPath) && parentPath.node.arguments.length > 0) {
-                var args = parentPath.node.arguments;
+            CallExpression: function CallExpression(path) {
+              if (t.isIdentifier(path.node.callee) && path.node.callee.name === connect) {
+                var args = path.node.arguments;
                 args[0] = t.callExpression(
                   t.identifier(_apConnect),
-                  [args[0]]
+                  args.length > 0 ? [args[0]] : []
                 );
-                // Add _apConnect function
                 if (needDefineConnect) {
                   state.file.path.unshiftContainer('body', babylon.parse(`
                     var ${_apConnect} = function(mapStateToProps) {
@@ -292,8 +263,50 @@ module.exports = function ({types: t}) {
           t.JSXIdentifier('layoutContext'), t.JSXExpressionContainer(t.thisExpression())
         ));
       },
+      VariableDeclaration: function VariableDeclaration(path, state) {
+        if (connecting) {
+          var declarations = path.node.declarations;
+          for (var i = declarations.length; i--;) {
+            var declaration = declarations[i];
+            if (t.isObjectPattern(declaration.id)) {
+              var properties = declaration.id.properties;
+              for (var j = properties.length; j--; ) {
+                var property = properties[j];
+                if (t.isIdentifier(property.key) && property.key.name === connect) {
+                  connecting = false;
+                  return;
+                }
+              }
+            }
+          }
+        }
+      },
+      ImportDeclaration: function ImportDeclaration(path, state) {
+        if (connecting && t.isLiteral(path.node.source) && path.node.source.value === 'react-redux') {
+          var specifiers = path.node.specifiers;
+          for (var i = specifiers.length; i--; ) {
+             var specifier = specifiers[i];
+             if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.imported) && specifier.imported.name === connect) {
+               connecting = false;
+               if (t.isIdentifier(specifier.local)) {
+                 connect = specifier.local.name;
+               }
+             }
+          }
+        }
+      },
       Program: function Program(path, state) {
+        // Ignore outside apentle system
+        var filename = state.file.opts.filename;
+        if (filename.indexOf('node_modules') !== -1
+          && filename.indexOf('node_modules/apentle-') === -1) {
+          component = false;
+          connecting = false;
+          return;
+        }
         component = undefined;
+        connecting = true;
+        connect = 'connect';
 
         var body = path.node.body;
         for (var i = body.length; i--; ) {
